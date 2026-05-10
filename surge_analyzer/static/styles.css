@@ -1,0 +1,316 @@
+:root {
+  color: #17202a;
+  background: #f7f8f5;
+  font-family: "Segoe UI", "Malgun Gothic", Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f7f8f5;
+}
+
+.app-shell {
+  width: min(1440px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 28px 0 48px;
+}
+
+.toolbar,
+.search-panel,
+.summary-band,
+.detail-block,
+.chart-block {
+  background: #ffffff;
+  border: 1px solid #d7ddd2;
+  border-radius: 8px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 28px;
+  letter-spacing: 0;
+}
+
+.toolbar p {
+  margin-top: 8px;
+  color: #586474;
+}
+
+.disclaimer {
+  color: #9a3412;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.search-panel {
+  margin-top: 16px;
+  padding: 20px;
+}
+
+label {
+  display: grid;
+  gap: 8px;
+  font-weight: 700;
+}
+
+textarea,
+input,
+select {
+  width: 100%;
+  border: 1px solid #cbd5c4;
+  border-radius: 6px;
+  padding: 12px;
+  font: inherit;
+  background: #ffffff;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 180px 1fr 160px;
+  gap: 12px;
+  align-items: end;
+  margin-top: 14px;
+}
+
+button {
+  height: 46px;
+  border: 0;
+  border-radius: 6px;
+  background: #1f6f5b;
+  color: #ffffff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.summary-band {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin-top: 18px;
+  overflow: hidden;
+}
+
+.summary-band div {
+  padding: 18px;
+  background: #eef5ef;
+}
+
+.label,
+.metric-grid span,
+td span,
+td small {
+  display: block;
+  color: #667085;
+  font-size: 13px;
+}
+
+.summary-band strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 24px;
+}
+
+.result-table-wrap {
+  margin-top: 18px;
+  overflow-x: auto;
+  border: 1px solid #d7ddd2;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 920px;
+}
+
+th,
+td {
+  padding: 13px 14px;
+  border-bottom: 1px solid #e5e9e1;
+  text-align: left;
+  white-space: nowrap;
+}
+
+th {
+  background: #eef2ea;
+  color: #344054;
+  font-size: 13px;
+}
+
+.score,
+.final-score {
+  color: #1f6f5b;
+  font-weight: 900;
+}
+
+.badge {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #e9f7ef;
+  color: #146c43;
+  font-weight: 800;
+}
+
+.detail-block,
+.chart-block {
+  margin-top: 18px;
+  padding: 22px;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid #e5e9e1;
+  padding-bottom: 18px;
+}
+
+.detail-header h2 span {
+  color: #667085;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.detail-header p {
+  margin-top: 8px;
+  color: #475467;
+}
+
+.final-score {
+  min-width: 110px;
+  text-align: right;
+  font-size: 40px;
+}
+
+.final-score span {
+  font-size: 18px;
+  color: #667085;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.metric-grid div {
+  border: 1px solid #e5e9e1;
+  border-radius: 6px;
+  padding: 12px;
+  background: #fbfcfa;
+}
+
+.metric-grid strong {
+  display: block;
+  margin-top: 5px;
+}
+
+.score-grid,
+.note-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.score-grid section,
+.note-grid section {
+  border: 1px solid #e5e9e1;
+  border-radius: 6px;
+  padding: 14px;
+}
+
+h3 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 16px;
+}
+
+h3 span {
+  color: #1f6f5b;
+}
+
+ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: #475467;
+}
+
+li + li {
+  margin-top: 5px;
+}
+
+.total-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 14px;
+  border-radius: 6px;
+  background: #eef5ef;
+}
+
+.warning-text {
+  color: #b42318;
+  font-weight: 800;
+}
+
+.chart-block img {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  border: 1px solid #d7ddd2;
+  border-radius: 6px;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    width: min(100% - 24px, 1440px);
+  }
+
+  .toolbar,
+  .detail-header,
+  .total-line {
+    display: block;
+  }
+
+  .disclaimer,
+  .final-score {
+    margin-top: 12px;
+    text-align: left;
+  }
+
+  .form-grid,
+  .summary-band,
+  .metric-grid,
+  .score-grid,
+  .note-grid {
+    grid-template-columns: 1fr;
+  }
+}

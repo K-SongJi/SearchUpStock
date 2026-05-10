@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>급등 후보 조건검색기</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="toolbar">
+        <div>
+          <h1>급등 후보 조건검색기</h1>
+          <p>기술적 조건이 여러 개 겹치는 종목을 점수순으로 선별하는 보조 도구입니다.</p>
+        </div>
+        <div class="disclaimer">매수 추천이나 수익 보장이 아닙니다.</div>
+      </section>
+
+      <form class="search-panel" action="/analyze" method="post">
+        <label>
+          종목 입력
+          <textarea name="symbols" rows="7" placeholder="005930&#10;035720.KQ&#10;AAPL&#10;TSLA">{{ symbols }}</textarea>
+        </label>
+        <div class="form-grid">
+          <label>
+            조회 기간
+            <select name="period">
+              {% for option in ["6mo", "1y", "2y", "5y"] %}
+                <option value="{{ option }}" {% if option == period %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            차트 표시 종목
+            <input name="chart_symbol" value="{{ chart_symbol }}" placeholder="예: 005930 또는 AAPL">
+          </label>
+          <button type="submit">분석하기</button>
+        </div>
+      </form>
+
+      {% if results %}
+        <section class="summary-band">
+          <div>
+            <span class="label">분석 종목</span>
+            <strong>{{ total_count }}개</strong>
+          </div>
+          <div>
+            <span class="label">조건검색 통과</span>
+            <strong>{{ matched_count }}개</strong>
+          </div>
+          <div>
+            <span class="label">기준</span>
+            <strong>최종 65점 이상</strong>
+          </div>
+        </section>
+
+        <section class="result-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>종목명</th>
+                <th>종가</th>
+                <th>필터 전</th>
+                <th>최종 점수</th>
+                <th>최종 등급</th>
+                <th>거래량 비율</th>
+                <th>RSI</th>
+                <th>이격도</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for result in results %}
+                <tr>
+                  <td>
+                    <strong>{{ result.input_symbol }}</strong>
+                    <span>{{ result.yahoo_symbol }}</span>
+                    {% if result.error %}<small>데이터 부족</small>{% endif %}
+                  </td>
+                  <td>{% if not result.error %}{{ "{:,.2f}".format(result.close) }}{% else %}-{% endif %}</td>
+                  <td>{{ result.pre_filter_score }}</td>
+                  <td class="score">{{ result.final_score }}</td>
+                  <td><span class="badge">{{ result.final_grade }}</span></td>
+                  <td>{% if not result.error %}{{ "{:.2f}배".format(result.metrics["VOL_RATIO"]) }}{% else %}-{% endif %}</td>
+                  <td>{% if not result.error %}{{ "{:.2f}".format(result.metrics["RSI14"]) }}{% else %}-{% endif %}</td>
+                  <td>{% if not result.error %}{{ "{:.2f}".format(result.metrics["DISPARITY20"]) }}{% else %}-{% endif %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </section>
+
+        {% for result in results %}
+          <article class="detail-block">
+            <div class="detail-header">
+              <div>
+                <h2>{{ result.input_symbol }} <span>{{ result.yahoo_symbol }}</span></h2>
+                <p>{{ result.final_opinion }}</p>
+              </div>
+              <div class="final-score">{{ result.final_score }}<span>/100</span></div>
+            </div>
+
+            {% if result.error %}
+              <p class="warning-text">{{ result.error }}</p>
+            {% else %}
+              <div class="metric-grid">
+                <div><span>현재 종가</span><strong>{{ "{:,.2f}".format(result.close) }}</strong></div>
+                <div><span>MA5</span><strong>{{ "{:,.2f}".format(result.metrics["MA5"]) }}</strong></div>
+                <div><span>MA20</span><strong>{{ "{:,.2f}".format(result.metrics["MA20"]) }}</strong></div>
+                <div><span>MA60</span><strong>{{ "{:,.2f}".format(result.metrics["MA60"]) }}</strong></div>
+                <div><span>RSI 14</span><strong>{{ "{:.2f}".format(result.metrics["RSI14"]) }}</strong></div>
+                <div><span>BB 상단</span><strong>{{ "{:,.2f}".format(result.metrics["BB_UPPER"]) }}</strong></div>
+                <div><span>BB 중심</span><strong>{{ "{:,.2f}".format(result.metrics["BB_MID"]) }}</strong></div>
+                <div><span>BB 하단</span><strong>{{ "{:,.2f}".format(result.metrics["BB_LOWER"]) }}</strong></div>
+                <div><span>밴드폭</span><strong>{{ "{:.2f}%".format(result.metrics["BB_WIDTH"]) }}</strong></div>
+                <div><span>20일 이격도</span><strong>{{ "{:.2f}".format(result.metrics["DISPARITY20"]) }}</strong></div>
+                <div><span>스토캐스틱 K</span><strong>{{ "{:.2f}".format(result.metrics["STO_K"]) }}</strong></div>
+                <div><span>스토캐스틱 D</span><strong>{{ "{:.2f}".format(result.metrics["STO_D"]) }}</strong></div>
+                <div><span>현재 거래량</span><strong>{{ "{:,.0f}".format(result.metrics["Volume"]) }}</strong></div>
+                <div><span>20일 평균 거래량</span><strong>{{ "{:,.0f}".format(result.metrics["VOL_AVG20"]) }}</strong></div>
+                <div><span>거래량 비율</span><strong>{{ "{:.2f}배".format(result.metrics["VOL_RATIO"]) }}</strong></div>
+              </div>
+
+              <div class="score-grid">
+                {% for item in result.score_items %}
+                  <section>
+                    <h3>{{ item.name }} <span>{{ item.score }}/{{ item.max_score }}점</span></h3>
+                    <ul>
+                      {% for detail in item.details %}
+                        <li>{{ detail }}</li>
+                      {% endfor %}
+                    </ul>
+                  </section>
+                {% endfor %}
+              </div>
+
+              <div class="note-grid">
+                <section>
+                  <h3>좋은 조건</h3>
+                  {% if result.good_conditions %}
+                    <ul>{% for item in result.good_conditions %}<li>{{ item }}</li>{% endfor %}</ul>
+                  {% else %}
+                    <p>뚜렷하게 겹친 긍정 조건이 적습니다.</p>
+                  {% endif %}
+                </section>
+                <section>
+                  <h3>주의사항</h3>
+                  <ul>
+                    {% for item in result.risk_conditions %}<li>{{ item }}</li>{% endfor %}
+                    {% for item in result.warnings %}<li>{{ item }}</li>{% endfor %}
+                    <li>{{ result.stop_loss_candidate }}</li>
+                  </ul>
+                </section>
+              </div>
+
+              <div class="total-line">
+                <span>거래량 필터 적용 전 {{ result.pre_filter_score }}점</span>
+                <strong>최종 {{ result.final_score }}점 · {{ result.final_grade }}</strong>
+              </div>
+            {% endif %}
+          </article>
+        {% endfor %}
+      {% endif %}
+
+      {% if chart_symbol %}
+        <section class="chart-block">
+          <h2>차트</h2>
+          {% if chart_image %}
+            <img src="data:image/png;base64,{{ chart_image }}" alt="{{ chart_symbol }} 기술적 차트">
+          {% else %}
+            <p class="warning-text">차트 데이터를 불러오지 못했습니다.</p>
+          {% endif %}
+        </section>
+      {% endif %}
+    </main>
+  </body>
+</html>
