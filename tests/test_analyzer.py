@@ -4,6 +4,7 @@ import pandas as pd
 
 from surge_analyzer.analyzer import analyze_many_df, analyze_prices, normalize_symbol
 from surge_analyzer.resolver import resolve_symbol
+from surge_analyzer.web_app import _parse_symbols
 
 
 def sample_prices() -> pd.DataFrame:
@@ -62,6 +63,12 @@ class AnalyzerTests(unittest.TestCase):
     def test_dataframe_result_shape(self):
         df = analyze_many_df([])
         self.assertIn("최종점수", df.columns)
+
+    def test_parse_symbols_accepts_multiple_separators(self):
+        self.assertEqual(
+            _parse_symbols("삼성전자, 두산에너빌리티\n구영테크"),
+            ["삼성전자", "두산에너빌리티", "구영테크"],
+        )
 
 
 if __name__ == "__main__":

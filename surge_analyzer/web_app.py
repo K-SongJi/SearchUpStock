@@ -22,20 +22,17 @@ plt.rcParams["font.family"] = ["Malgun Gothic", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
 
-DEFAULT_SYMBOLS = "삼성전자\n두산에너빌리티\n구영테크\nAAPL"
-
-
 @app.get("/")
 def index():
     return render_template(
         "index.html",
-        symbols=DEFAULT_SYMBOLS,
+        symbols="",
         period="1y",
         results=[],
         matched_count=0,
         total_count=0,
         chart_symbol="",
-        chart_image=None,
+        charts=[],
     )
 
 
@@ -47,7 +44,8 @@ def analyze():
     symbols = _parse_symbols(symbols_text)
     results = analyze_many(symbols, period=period) if symbols else []
     matched_count = sum(1 for result in results if result.final_score >= 65 and not result.is_error)
-    chart_image = _chart_as_base64(chart_symbol, period) if chart_symbol else None
+    chart_symbols = _parse_symbols(chart_symbol)
+    charts = [_chart_for_symbol(symbol, period) for symbol in chart_symbols]
 
     return render_template(
         "index.html",
@@ -57,7 +55,7 @@ def analyze():
         matched_count=matched_count,
         total_count=len(results),
         chart_symbol=chart_symbol,
-        chart_image=chart_image,
+        charts=charts,
     )
 
 
@@ -130,6 +128,22 @@ def _chart_as_base64(symbol: str, period: str) -> str | None:
     plt.close(fig)
     buffer.seek(0)
     return base64.b64encode(buffer.read()).decode("ascii")
+
+
+def _chart_for_symbol(symbol: str, period: str) -> dict[str, str | None]:
+    try:
+        display_name = display_name_for_symbol(symbol)
+        yahoo_symbol = normalize_symbol(symbol)
+    except Exception:
+        display_name = symbol
+        yahoo_symbol = symbol
+
+    return {
+        "input": symbol,
+        "display_name": display_name,
+        "yahoo_symbol": yahoo_symbol,
+        "image": _chart_as_base64(symbol, period),
+    }
 
 
 if __name__ == "__main__":

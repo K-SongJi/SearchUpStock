@@ -38,6 +38,12 @@
         </div>
       </form>
 
+      <div class="loading-panel" aria-live="polite" aria-hidden="true">
+        <div class="loading-spinner"></div>
+        <strong>분석 중입니다</strong>
+        <span>시세 데이터와 차트를 불러오는 중입니다.</span>
+      </div>
+
       {% if results %}
         <section class="summary-band">
           <div>
@@ -161,33 +167,65 @@
         {% endfor %}
       {% endif %}
 
-      {% if chart_symbol %}
+      {% if charts %}
         <section class="chart-block">
           <h2>차트</h2>
-          {% if chart_image %}
-            <img src="data:image/png;base64,{{ chart_image }}" alt="{{ chart_symbol }} 기술적 차트">
-          {% else %}
-            <p class="warning-text">차트 데이터를 불러오지 못했습니다.</p>
-          {% endif %}
+          {% for chart in charts %}
+            <section class="chart-item">
+              <h3>{{ chart.display_name }} <span>{{ chart.yahoo_symbol }}</span></h3>
+              {% if chart.image %}
+                <img src="data:image/png;base64,{{ chart.image }}" alt="{{ chart.display_name }} 기술적 차트">
+              {% else %}
+                <p class="warning-text">{{ chart.input }} 차트 데이터를 불러오지 못했습니다.</p>
+              {% endif %}
+            </section>
+          {% endfor %}
         </section>
       {% endif %}
     </main>
 
     <script>
-      const symbolsTextarea = document.querySelector('textarea[name="symbols"]');
-      const chartSymbolInput = document.querySelector('input[name="chart_symbol"]');
+      document.addEventListener("DOMContentLoaded", function () {
+        const form = document.querySelector(".search-panel");
+        const symbolsTextarea = document.querySelector('textarea[name="symbols"]');
+        const chartSymbolInput = document.querySelector('input[name="chart_symbol"]');
+        const submitButton = form.querySelector('button[type="submit"]');
 
-      function getFirstSymbol(text) {
-        return text
-          .split(/\n|,|\s+/)
-          .map(item => item.trim())
-          .filter(Boolean)[0] || "";
-      }
+        let chartEdited = false;
 
-      symbolsTextarea.addEventListener("input", function () {
-        if (!chartSymbolInput.value.trim()) {
-          chartSymbolInput.value = getFirstSymbol(symbolsTextarea.value);
+        function normalizeChartSymbols(text) {
+          return text
+            .split(/\n|,|\s+/)
+            .map(item => item.trim())
+            .filter(Boolean)
+            .join(", ");
         }
+
+        symbolsTextarea.addEventListener("input", function () {
+          if (!chartEdited) {
+            chartSymbolInput.value = normalizeChartSymbols(symbolsTextarea.value);
+          }
+        });
+
+        symbolsTextarea.addEventListener("keydown", function (event) {
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            form.requestSubmit();
+          }
+        });
+
+        chartSymbolInput.addEventListener("input", function () {
+          chartEdited = true;
+        });
+
+        form.addEventListener("submit", function () {
+          if (!chartSymbolInput.value.trim()) {
+            chartSymbolInput.value = normalizeChartSymbols(symbolsTextarea.value);
+          }
+          document.body.classList.add("is-loading");
+          submitButton.disabled = true;
+          submitButton.textContent = "분석 중";
+        });
       });
     </script>
     

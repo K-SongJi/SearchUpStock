@@ -104,6 +104,46 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.loading-panel {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px 18px;
+  border: 1px solid #c7d7cd;
+  border-radius: 8px;
+  background: #eef5ef;
+  color: #1f3d35;
+}
+
+.is-loading .loading-panel {
+  display: flex;
+}
+
+.loading-panel span {
+  color: #586474;
+}
+
+.loading-spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid #c7d7cd;
+  border-top-color: #1f6f5b;
+  border-radius: 999px;
+  animation: spin 0.85s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .summary-band {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -287,6 +327,12 @@ li + li {
   margin-top: 14px;
   border: 1px solid #d7ddd2;
   border-radius: 6px;
+}
+
+.chart-item + .chart-item {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid #e5e9e1;
 }
 
 @media (max-width: 900px) {
