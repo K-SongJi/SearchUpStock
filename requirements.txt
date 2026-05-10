@@ -3,3 +3,4 @@ pandas>=2.2.0
 numpy>=1.26.0
 Flask>=3.0.0
 matplotlib>=3.8.0
+finance-datareader>=0.9.96

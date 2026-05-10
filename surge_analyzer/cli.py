@@ -21,7 +21,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _print_result(result: AnalysisResult) -> None:
     print("=" * 88)
-    print(f"종목명: {result.input_symbol} -> 조회 코드: {result.yahoo_symbol}")
+    print(f"종목명: {result.display_name or result.input_symbol} -> 조회 코드: {result.yahoo_symbol}")
 
     if result.is_error:
         print(f"데이터 부족: {result.error}")

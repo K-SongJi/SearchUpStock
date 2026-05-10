@@ -7,6 +7,9 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
+from .resolver import normalize_symbol as _normalize_symbol
+from .resolver import resolve_symbol as _resolve_symbol
+
 
 @dataclass(frozen=True)
 class ScoreItem:
@@ -20,6 +23,7 @@ class ScoreItem:
 class AnalysisResult:
     input_symbol: str
     yahoo_symbol: str
+    display_name: str = ""
     close: float = 0.0
     metrics: dict[str, float] = field(default_factory=dict)
     score_items: tuple[ScoreItem, ...] = ()
@@ -39,23 +43,18 @@ class AnalysisResult:
 
 
 def normalize_symbol(symbol: str) -> str:
-    cleaned = symbol.strip().upper()
-    if not cleaned:
-        raise ValueError("종목 코드를 입력해 주세요.")
-
-    if cleaned.endswith((".KS", ".KQ")):
-        return cleaned
-
-    if cleaned.isdigit() and len(cleaned) == 6:
-        return f"{cleaned}.KS"
-
-    return cleaned
+    return _normalize_symbol(symbol)
 
 
 def analyze_symbol(symbol: str, period: str = "1y") -> AnalysisResult:
-    yahoo_symbol = normalize_symbol(symbol)
-    prices = _download_prices(yahoo_symbol, period)
-    return analyze_prices(symbol, yahoo_symbol, prices)
+    resolved = _resolve_symbol(symbol)
+    prices = _download_prices(resolved.yahoo_symbol, period)
+    return analyze_prices(
+        resolved.input_text,
+        resolved.yahoo_symbol,
+        prices,
+        display_name=resolved.display_name,
+    )
 
 
 def analyze_many(symbols: Iterable[str], period: str = "1y") -> list[AnalysisResult]:
@@ -64,11 +63,18 @@ def analyze_many(symbols: Iterable[str], period: str = "1y") -> list[AnalysisRes
         try:
             results.append(analyze_symbol(symbol, period=period))
         except Exception as exc:
-            yahoo_symbol = normalize_symbol(symbol) if symbol.strip() else symbol
+            try:
+                resolved = _resolve_symbol(symbol)
+                yahoo_symbol = resolved.yahoo_symbol
+                display_name = resolved.display_name
+            except Exception:
+                yahoo_symbol = symbol
+                display_name = symbol
             results.append(
                 AnalysisResult(
                     input_symbol=symbol,
                     yahoo_symbol=yahoo_symbol,
+                    display_name=display_name,
                     error=str(exc),
                     warnings=(str(exc),),
                 )
@@ -93,6 +99,7 @@ def analyze_many_df(symbols: Iterable[str], period: str = "1y") -> pd.DataFrame:
     for result in analyze_many(symbols, period=period):
         row = {
             "종목": result.input_symbol,
+            "종목명": result.display_name,
             "조회코드": result.yahoo_symbol,
             "현재종가": result.close,
             "필터전점수": result.pre_filter_score,
@@ -111,7 +118,12 @@ def analyze_many_df(symbols: Iterable[str], period: str = "1y") -> pd.DataFrame:
     return frame.sort_values("최종점수", ascending=False, ignore_index=True)
 
 
-def analyze_prices(input_symbol: str, yahoo_symbol: str, prices: pd.DataFrame) -> AnalysisResult:
+def analyze_prices(
+    input_symbol: str,
+    yahoo_symbol: str,
+    prices: pd.DataFrame,
+    display_name: str | None = None,
+) -> AnalysisResult:
     prepared = _prepare_indicators(prices)
     latest = prepared.iloc[-1]
     previous = prepared.iloc[-2]
@@ -129,6 +141,7 @@ def analyze_prices(input_symbol: str, yahoo_symbol: str, prices: pd.DataFrame) -
     return AnalysisResult(
         input_symbol=input_symbol,
         yahoo_symbol=yahoo_symbol,
+        display_name=display_name or input_symbol,
         close=float(latest["Close"]),
         metrics=metrics,
         score_items=tuple(score_items),

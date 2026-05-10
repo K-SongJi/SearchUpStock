@@ -19,7 +19,7 @@
       <form class="search-panel" action="/analyze" method="post">
         <label>
           종목 입력
-          <textarea name="symbols" rows="7" placeholder="005930&#10;035720.KQ&#10;AAPL&#10;TSLA">{{ symbols }}</textarea>
+          <textarea name="symbols" rows="7" placeholder="삼성전자&#10;두산에너빌리티&#10;구영테크&#10;AAPL">{{ symbols }}</textarea>
         </label>
         <div class="form-grid">
           <label>
@@ -32,7 +32,7 @@
           </label>
           <label>
             차트 표시 종목
-            <input name="chart_symbol" value="{{ chart_symbol }}" placeholder="예: 005930 또는 AAPL">
+            <input name="chart_symbol" value="{{ chart_symbol }}" placeholder="예: 삼성전자 또는 AAPL">
           </label>
           <button type="submit">분석하기</button>
         </div>
@@ -72,7 +72,7 @@
               {% for result in results %}
                 <tr>
                   <td>
-                    <strong>{{ result.input_symbol }}</strong>
+                    <strong>{{ result.display_name or result.input_symbol }}</strong>
                     <span>{{ result.yahoo_symbol }}</span>
                     {% if result.error %}<small>데이터 부족</small>{% endif %}
                   </td>
@@ -93,7 +93,7 @@
           <article class="detail-block">
             <div class="detail-header">
               <div>
-                <h2>{{ result.input_symbol }} <span>{{ result.yahoo_symbol }}</span></h2>
+                <h2>{{ result.display_name or result.input_symbol }} <span>{{ result.yahoo_symbol }}</span></h2>
                 <p>{{ result.final_opinion }}</p>
               </div>
               <div class="final-score">{{ result.final_score }}<span>/100</span></div>
@@ -172,5 +172,24 @@
         </section>
       {% endif %}
     </main>
+
+    <script>
+      const symbolsTextarea = document.querySelector('textarea[name="symbols"]');
+      const chartSymbolInput = document.querySelector('input[name="chart_symbol"]');
+
+      function getFirstSymbol(text) {
+        return text
+          .split(/\n|,|\s+/)
+          .map(item => item.trim())
+          .filter(Boolean)[0] || "";
+      }
+
+      symbolsTextarea.addEventListener("input", function () {
+        if (!chartSymbolInput.value.trim()) {
+          chartSymbolInput.value = getFirstSymbol(symbolsTextarea.value);
+        }
+      });
+    </script>
+    
   </body>
 </html>

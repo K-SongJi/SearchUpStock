@@ -3,6 +3,7 @@ import unittest
 import pandas as pd
 
 from surge_analyzer.analyzer import analyze_many_df, analyze_prices, normalize_symbol
+from surge_analyzer.resolver import resolve_symbol
 
 
 def sample_prices() -> pd.DataFrame:
@@ -29,6 +30,18 @@ class AnalyzerTests(unittest.TestCase):
     def test_normalize_korean_code_defaults_to_kospi(self):
         self.assertEqual(normalize_symbol("005930"), "005930.KS")
 
+    def test_resolve_korean_stock_name(self):
+        resolved = resolve_symbol("삼성전자")
+
+        self.assertEqual(resolved.yahoo_symbol, "005930.KS")
+        self.assertEqual(resolved.display_name, "삼성전자")
+
+    def test_resolve_kosdaq_name(self):
+        resolved = resolve_symbol("구영테크")
+
+        self.assertEqual(resolved.yahoo_symbol, "053270.KQ")
+        self.assertEqual(resolved.display_name, "구영테크")
+
     def test_normalize_preserves_kosdaq_suffix(self):
         self.assertEqual(normalize_symbol("035720.kq"), "035720.KQ")
 
@@ -44,6 +57,7 @@ class AnalyzerTests(unittest.TestCase):
         self.assertIn(result.final_grade, {"급등 후보 강함", "관심종목", "관망", "매수 부적합"})
         self.assertIn("MA5", result.metrics)
         self.assertIn("VOL_RATIO", result.metrics)
+        self.assertEqual(result.display_name, "TEST")
 
     def test_dataframe_result_shape(self):
         df = analyze_many_df([])

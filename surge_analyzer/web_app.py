@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from flask import Flask, render_template, request
 
 from .analyzer import analyze_many, get_price_history, normalize_symbol
+from .resolver import display_name_for_symbol
 
 
 app = Flask(__name__)
@@ -21,7 +22,7 @@ plt.rcParams["font.family"] = ["Malgun Gothic", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
 
-DEFAULT_SYMBOLS = "005930\nAAPL\nTSLA"
+DEFAULT_SYMBOLS = "삼성전자\n두산에너빌리티\n구영테크\nAAPL"
 
 
 @app.get("/")
@@ -94,7 +95,7 @@ def _chart_as_base64(symbol: str, period: str) -> str | None:
         color="#ddd6fe",
         alpha=0.22,
     )
-    axes[0].set_title(f"{normalize_symbol(symbol)} 기술적 차트")
+    axes[0].set_title(f"{display_name_for_symbol(symbol)} ({normalize_symbol(symbol)}) 기술적 차트")
     axes[0].legend(loc="upper left", ncols=4, fontsize=8)
 
     axes[1].bar(visible.index, visible["Volume"], color="#64748b", width=1)
