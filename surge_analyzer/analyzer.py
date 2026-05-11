@@ -80,7 +80,7 @@ def analyze_many(symbols: Iterable[str], period: str = "1y") -> list[AnalysisRes
                 )
             )
 
-    return sorted(results, key=lambda result: result.final_score, reverse=True)
+    return results
 
 
 def analyze_many_df(symbols: Iterable[str], period: str = "1y") -> pd.DataFrame:
@@ -115,7 +115,7 @@ def analyze_many_df(symbols: Iterable[str], period: str = "1y") -> pd.DataFrame:
     frame = pd.DataFrame(rows, columns=columns if not rows else None)
     if frame.empty:
         return frame
-    return frame.sort_values("최종점수", ascending=False, ignore_index=True)
+    return frame
 
 
 def analyze_prices(

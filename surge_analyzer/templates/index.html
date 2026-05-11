@@ -64,10 +64,16 @@
           <table>
             <thead>
               <tr>
-                <th>종목명</th>
-                <th>종가</th>
+                <th>
+                  <button class="sort-button" type="button" data-reset-order="true">종목명 <span>처음순</span></button>
+                </th>
+                <th>
+                  <button class="sort-button" type="button" data-sort-key="close">종가 <span class="sort-icon">◇</span></button>
+                </th>
                 <th>필터 전</th>
-                <th>최종 점수</th>
+                <th>
+                  <button class="sort-button" type="button" data-sort-key="score">최종 점수 <span class="sort-icon">◇</span></button>
+                </th>
                 <th>최종 등급</th>
                 <th>거래량 비율</th>
                 <th>RSI</th>
@@ -76,13 +82,15 @@
             </thead>
             <tbody>
               {% for result in results %}
-                <tr>
+                <tr data-order="{{ loop.index0 }}" data-close="{{ result.close }}" data-score="{{ result.final_score }}">
                   <td>
-                    <strong>{{ result.display_name or result.input_symbol }}</strong>
+                    <a class="stock-link" href="#detail-{{ loop.index }}">
+                      <strong>{{ result.display_name or result.input_symbol }}</strong>
+                    </a>
                     <span>{{ result.yahoo_symbol }}</span>
                     {% if result.error %}<small>데이터 부족</small>{% endif %}
                   </td>
-                  <td>{% if not result.error %}{{ "{:,.2f}".format(result.close) }}{% else %}-{% endif %}</td>
+                  <td>{% if not result.error %}{{ result.close|market_price(result.yahoo_symbol) }}{% else %}-{% endif %}</td>
                   <td>{{ result.pre_filter_score }}</td>
                   <td class="score">{{ result.final_score }}</td>
                   <td><span class="badge">{{ result.final_grade }}</span></td>
@@ -95,8 +103,9 @@
           </table>
         </section>
 
-        {% for result in results %}
-          <article class="detail-block">
+        <section class="detail-list">
+          {% for result in results %}
+          <article class="detail-block" id="detail-{{ loop.index }}" data-order="{{ loop.index0 }}" data-close="{{ result.close }}" data-score="{{ result.final_score }}">
             <div class="detail-header">
               <div>
                 <h2>{{ result.display_name or result.input_symbol }} <span>{{ result.yahoo_symbol }}</span></h2>
@@ -109,7 +118,7 @@
               <p class="warning-text">{{ result.error }}</p>
             {% else %}
               <div class="metric-grid">
-                <div><span>현재 종가</span><strong>{{ "{:,.2f}".format(result.close) }}</strong></div>
+                <div><span>현재 종가</span><strong>{{ result.close|market_price(result.yahoo_symbol) }}</strong></div>
                 <div><span>MA5</span><strong>{{ "{:,.2f}".format(result.metrics["MA5"]) }}</strong></div>
                 <div><span>MA20</span><strong>{{ "{:,.2f}".format(result.metrics["MA20"]) }}</strong></div>
                 <div><span>MA60</span><strong>{{ "{:,.2f}".format(result.metrics["MA60"]) }}</strong></div>
@@ -162,15 +171,28 @@
                 <span>거래량 필터 적용 전 {{ result.pre_filter_score }}점</span>
                 <strong>최종 {{ result.final_score }}점 · {{ result.final_grade }}</strong>
               </div>
+
+              {% set chart = charts_by_yahoo.get(result.yahoo_symbol) %}
+              {% if chart %}
+                <section class="embedded-chart">
+                  <h3>{{ chart.display_name }} <span>{{ chart.yahoo_symbol }}</span></h3>
+                  {% if chart.image %}
+                    <img src="data:image/png;base64,{{ chart.image }}" alt="{{ chart.display_name }} 기술적 차트">
+                  {% else %}
+                    <p class="warning-text">{{ chart.input }} 차트 데이터를 불러오지 못했습니다.</p>
+                  {% endif %}
+                </section>
+              {% endif %}
             {% endif %}
           </article>
-        {% endfor %}
+          {% endfor %}
+        </section>
       {% endif %}
 
-      {% if charts %}
+      {% if standalone_charts %}
         <section class="chart-block">
           <h2>차트</h2>
-          {% for chart in charts %}
+          {% for chart in standalone_charts %}
             <section class="chart-item">
               <h3>{{ chart.display_name }} <span>{{ chart.yahoo_symbol }}</span></h3>
               {% if chart.image %}
@@ -184,12 +206,18 @@
       {% endif %}
     </main>
 
+    <button class="scroll-top-button" type="button" aria-label="맨위로 가기">맨위로</button>
+
     <script>
       document.addEventListener("DOMContentLoaded", function () {
         const form = document.querySelector(".search-panel");
         const symbolsTextarea = document.querySelector('textarea[name="symbols"]');
         const chartSymbolInput = document.querySelector('input[name="chart_symbol"]');
         const submitButton = form.querySelector('button[type="submit"]');
+        const scrollTopButton = document.querySelector(".scroll-top-button");
+        const resultBody = document.querySelector(".result-table-wrap tbody");
+        const detailList = document.querySelector(".detail-list");
+        const sortButtons = document.querySelectorAll(".sort-button");
 
         let chartEdited = false;
 
@@ -225,6 +253,106 @@
           document.body.classList.add("is-loading");
           submitButton.disabled = true;
           submitButton.textContent = "분석 중";
+        });
+
+        function toggleScrollTopButton() {
+          scrollTopButton.classList.toggle("is-visible", window.scrollY > 500);
+        }
+
+        scrollTopButton.addEventListener("click", function () {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+
+        window.addEventListener("scroll", toggleScrollTopButton, { passive: true });
+        toggleScrollTopButton();
+
+        const sortState = {};
+        const sortPriority = [];
+
+        function resetResultOrder() {
+          if (!resultBody || !detailList) return;
+
+          const rows = Array.from(resultBody.querySelectorAll("tr"));
+          const details = Array.from(detailList.querySelectorAll(".detail-block"));
+
+          function compareOriginalOrder(left, right) {
+            return Number(left.dataset.order || 0) - Number(right.dataset.order || 0);
+          }
+
+          rows.sort(compareOriginalOrder).forEach(row => resultBody.appendChild(row));
+          details.sort(compareOriginalOrder).forEach(detail => detailList.appendChild(detail));
+        }
+
+        function updateSortButtonIcons() {
+          sortButtons.forEach(button => {
+            const icon = button.querySelector(".sort-icon");
+            if (!icon) return;
+            const direction = sortState[button.dataset.sortKey];
+            icon.textContent = direction === "asc" ? "▲" : direction === "desc" ? "▼" : "◇";
+          });
+        }
+
+        function sortResultBlocks() {
+          if (!resultBody || !detailList) return;
+
+          const activeKeys = sortPriority.filter(key => sortState[key]);
+          if (!activeKeys.length) {
+            resetResultOrder();
+            return;
+          }
+
+          const rows = Array.from(resultBody.querySelectorAll("tr"));
+          const details = Array.from(detailList.querySelectorAll(".detail-block"));
+
+          function compareItems(left, right) {
+            for (const key of activeKeys) {
+              const multiplier = sortState[key] === "asc" ? 1 : -1;
+              const leftValue = Number(left.dataset[key] || 0);
+              const rightValue = Number(right.dataset[key] || 0);
+              if (leftValue !== rightValue) {
+                return (leftValue - rightValue) * multiplier;
+              }
+            }
+            return Number(left.dataset.order || 0) - Number(right.dataset.order || 0);
+          }
+
+          rows.sort(compareItems).forEach(row => resultBody.appendChild(row));
+          details.sort(compareItems).forEach(detail => detailList.appendChild(detail));
+        }
+
+        sortButtons.forEach(button => {
+          button.addEventListener("click", function () {
+            if (button.dataset.resetOrder === "true") {
+              Object.keys(sortState).forEach(key => delete sortState[key]);
+              sortPriority.length = 0;
+              updateSortButtonIcons();
+              resetResultOrder();
+              return;
+            }
+
+            const key = button.dataset.sortKey;
+            if (!key) return;
+
+            const currentDirection = sortState[key] || "none";
+            const nextDirection =
+              currentDirection === "none" ? "desc" :
+              currentDirection === "desc" ? "asc" :
+              null;
+
+            if (nextDirection) {
+              sortState[key] = nextDirection;
+              const existingIndex = sortPriority.indexOf(key);
+              if (existingIndex >= 0) sortPriority.splice(existingIndex, 1);
+              sortPriority.unshift(key);
+            } else {
+              delete sortState[key];
+              const existingIndex = sortPriority.indexOf(key);
+              if (existingIndex >= 0) sortPriority.splice(existingIndex, 1);
+            }
+
+            updateSortButtonIcons();
+            sortResultBlocks();
+          });
         });
       });
     </script>

@@ -22,6 +22,13 @@ plt.rcParams["font.family"] = ["Malgun Gothic", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
 
+@app.template_filter("market_price")
+def market_price(value: float, yahoo_symbol: str) -> str:
+    if yahoo_symbol.endswith((".KS", ".KQ")):
+        return f"{value:,.0f}원"
+    return f"${value:,.2f}"
+
+
 @app.get("/")
 def index():
     return render_template(
@@ -32,7 +39,8 @@ def index():
         matched_count=0,
         total_count=0,
         chart_symbol="",
-        charts=[],
+        charts_by_yahoo={},
+        standalone_charts=[],
     )
 
 
@@ -46,6 +54,7 @@ def analyze():
     matched_count = sum(1 for result in results if result.final_score >= 65 and not result.is_error)
     chart_symbols = _parse_symbols(chart_symbol)
     charts = [_chart_for_symbol(symbol, period) for symbol in chart_symbols]
+    charts_by_yahoo, standalone_charts = _split_charts_for_results(charts, results)
 
     return render_template(
         "index.html",
@@ -55,7 +64,8 @@ def analyze():
         matched_count=matched_count,
         total_count=len(results),
         chart_symbol=chart_symbol,
-        charts=charts,
+        charts_by_yahoo=charts_by_yahoo,
+        standalone_charts=standalone_charts,
     )
 
 
@@ -144,6 +154,21 @@ def _chart_for_symbol(symbol: str, period: str) -> dict[str, str | None]:
         "yahoo_symbol": yahoo_symbol,
         "image": _chart_as_base64(symbol, period),
     }
+
+
+def _split_charts_for_results(charts: list[dict[str, str | None]], results: list) -> tuple[dict[str, dict], list[dict]]:
+    result_symbols = {result.yahoo_symbol for result in results if not result.is_error}
+    charts_by_yahoo: dict[str, dict] = {}
+    standalone_charts: list[dict] = []
+
+    for chart in charts:
+        yahoo_symbol = chart.get("yahoo_symbol")
+        if yahoo_symbol in result_symbols and yahoo_symbol not in charts_by_yahoo:
+            charts_by_yahoo[yahoo_symbol] = chart
+        else:
+            standalone_charts.append(chart)
+
+    return charts_by_yahoo, standalone_charts
 
 
 if __name__ == "__main__":
