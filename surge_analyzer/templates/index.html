@@ -12,10 +12,15 @@
         <div>
           <h1>급등 후보 조건검색기</h1>
           <p>기술적 조건이 여러 개 겹치는 종목을 점수순으로 선별하는 보조 도구입니다.</p>
+          <nav class="main-tabs" aria-label="대메뉴">
+            <a href="{{ url_for('index') }}" class="{% if active_tab == 'analyze' %}is-active{% endif %}">급등 후보 분석</a>
+            <a href="{{ url_for('index') }}?tab=verify" class="{% if active_tab == 'verify' %}is-active{% endif %}">검증 모드</a>
+          </nav>
         </div>
         <div class="disclaimer">매수 추천이나 수익 보장이 아닙니다.</div>
       </section>
 
+      {% if active_tab == "analyze" %}
       <form class="search-panel" action="/analyze" method="post">
         <label>
           종목 입력
@@ -37,12 +42,348 @@
           <button type="submit">분석하기</button>
         </div>
       </form>
+      {% else %}
+      <form class="verify-panel" action="/verify" method="post" enctype="multipart/form-data">
+        <div>
+          <h2>검증 모드</h2>
+          <p>영웅문 조건검색 결과와 우리 분석 결과, 다음날 결과가 들어간 엑셀을 업로드하면 등급별 성과를 확인합니다.</p>
+        </div>
+        <div class="verify-upload">
+          <label>
+            엑셀 파일
+            <input type="file" name="verification_file" accept=".xlsx" required>
+          </label>
+          <button type="submit">검증하기</button>
+        </div>
+      </form>
+      {% endif %}
 
       <div class="loading-panel" aria-live="polite" aria-hidden="true">
         <div class="loading-spinner"></div>
-        <strong>분석 중입니다</strong>
-        <span>시세 데이터와 차트를 불러오는 중입니다.</span>
+        <strong>처리 중입니다</strong>
+        <span>데이터를 읽고 결과를 계산하는 중입니다.</span>
       </div>
+
+      {% if verification_error %}
+        <section class="chart-block">
+          <p class="warning-text">{{ verification_error }}</p>
+        </section>
+      {% endif %}
+
+      {% if verification %}
+        <section class="summary-band verification-summary">
+          <div>
+            <span class="label">분석 종목</span>
+            <strong>{{ verification.analyzed_count }}개</strong>
+          </div>
+          <div>
+            <span class="label">결과 매칭</span>
+            <strong>{{ verification.summary.total }}개</strong>
+          </div>
+          <div>
+            <span class="label">승률</span>
+            <strong>{{ "{:.1f}%".format(verification.summary.win_rate) }}</strong>
+          </div>
+          <div>
+            <span class="label">평균 수익률</span>
+            <strong>{{ verification.summary.average_rate|signed_percent }}</strong>
+          </div>
+        </section>
+
+        <section class="verify-grid">
+          <article>
+            <h2>등급별 성과</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>구분</th>
+                  <th>개수</th>
+                  <th>상승</th>
+                  <th>승률</th>
+                  <th>평균</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in verification.grade_stats %}
+                <tr>
+                  <td>{{ item.name }}</td>
+                  <td>{{ item.count }}</td>
+                  <td>{{ item.wins }}</td>
+                  <td>{{ "{:.1f}%".format(item.win_rate) }}</td>
+                  <td class="{% if item.average_rate >= 0 %}positive{% else %}negative{% endif %}">{{ item.average_rate|signed_percent }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+
+          <article>
+            <h2>점수 구간별 성과</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>구간</th>
+                  <th>개수</th>
+                  <th>상승</th>
+                  <th>승률</th>
+                  <th>평균</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in verification.score_stats %}
+                <tr>
+                  <td>{{ item.name }}</td>
+                  <td>{{ item.count }}</td>
+                  <td>{{ item.wins }}</td>
+                  <td>{{ "{:.1f}%".format(item.win_rate) }}</td>
+                  <td class="{% if item.average_rate >= 0 %}positive{% else %}negative{% endif %}">{{ item.average_rate|signed_percent }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+
+          <article>
+            <h2>거래량 비율별 성과</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>구간</th>
+                  <th>개수</th>
+                  <th>상승</th>
+                  <th>승률</th>
+                  <th>평균</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in verification.volume_stats %}
+                <tr>
+                  <td>{{ item.name }}</td>
+                  <td>{{ item.count }}</td>
+                  <td>{{ item.wins }}</td>
+                  <td>{{ "{:.1f}%".format(item.win_rate) }}</td>
+                  <td class="{% if item.average_rate >= 0 %}positive{% else %}negative{% endif %}">{{ item.average_rate|signed_percent }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+
+          <article>
+            <h2>RSI 구간별 성과</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>구간</th>
+                  <th>개수</th>
+                  <th>상승</th>
+                  <th>승률</th>
+                  <th>평균</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in verification.rsi_stats %}
+                <tr>
+                  <td>{{ item.name }}</td>
+                  <td>{{ item.count }}</td>
+                  <td>{{ item.wins }}</td>
+                  <td>{{ "{:.1f}%".format(item.win_rate) }}</td>
+                  <td class="{% if item.average_rate >= 0 %}positive{% else %}negative{% endif %}">{{ item.average_rate|signed_percent }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+
+          <article>
+            <h2>이격도 구간별 성과</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>구간</th>
+                  <th>개수</th>
+                  <th>상승</th>
+                  <th>승률</th>
+                  <th>평균</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in verification.disparity_stats %}
+                <tr>
+                  <td>{{ item.name }}</td>
+                  <td>{{ item.count }}</td>
+                  <td>{{ item.wins }}</td>
+                  <td>{{ "{:.1f}%".format(item.win_rate) }}</td>
+                  <td class="{% if item.average_rate >= 0 %}positive{% else %}negative{% endif %}">{{ item.average_rate|signed_percent }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+
+          <article>
+            <h2>당일 등락률별 성과</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>구간</th>
+                  <th>개수</th>
+                  <th>상승</th>
+                  <th>승률</th>
+                  <th>평균</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in verification.day_change_stats %}
+                <tr>
+                  <td>{{ item.name }}</td>
+                  <td>{{ item.count }}</td>
+                  <td>{{ item.wins }}</td>
+                  <td>{{ "{:.1f}%".format(item.win_rate) }}</td>
+                  <td class="{% if item.average_rate >= 0 %}positive{% else %}negative{% endif %}">{{ item.average_rate|signed_percent }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+
+          <article>
+            <h2>매매일기 합계</h2>
+            {% if verification.diary_by_date %}
+            <table>
+              <thead>
+                <tr>
+                  <th>날짜</th>
+                  <th>총액</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in verification.diary_by_date %}
+                <tr>
+                  <td>{{ item.date }}</td>
+                  <td>{{ "{:,.0f}원".format(item.total) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+              <p>매매일기 형식의 기록은 찾지 못했습니다.</p>
+            {% endif %}
+          </article>
+        </section>
+
+        <section class="mistake-grid">
+          <article>
+            <h2>높은 점수인데 실패한 종목</h2>
+            <p>최종 65점 이상이었지만 다음날 하락한 종목입니다.</p>
+            {% if verification.high_score_failures %}
+            <table>
+              <thead>
+                <tr>
+                  <th>종목명</th>
+                  <th>점수</th>
+                  <th>등급</th>
+                  <th>당일 등락률</th>
+                  <th>RSI</th>
+                  <th>이격도</th>
+                  <th>다음날</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in verification.high_score_failures %}
+                <tr>
+                  <td><strong>{{ row.name }}</strong><span>{{ row.code }}</span></td>
+                  <td class="score">{{ row.final_score }}</td>
+                  <td>{{ row.grade }}</td>
+                  <td>{{ row.day_rate|signed_percent if row.day_rate is defined else "-" }}</td>
+                  <td>{{ "{:.2f}".format(row.rsi) }}</td>
+                  <td>{{ "{:.2f}".format(row.disparity) }}</td>
+                  <td class="negative">{{ row.rate|signed_percent }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+              <p>해당 종목이 없습니다.</p>
+            {% endif %}
+          </article>
+
+          <article>
+            <h2>낮은 점수인데 성공한 종목</h2>
+            <p>매수 부적합 또는 50점 미만이었지만 다음날 상승한 종목입니다.</p>
+            {% if verification.low_score_successes %}
+            <table>
+              <thead>
+                <tr>
+                  <th>종목명</th>
+                  <th>점수</th>
+                  <th>등급</th>
+                  <th>당일 등락률</th>
+                  <th>RSI</th>
+                  <th>이격도</th>
+                  <th>다음날</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in verification.low_score_successes %}
+                <tr>
+                  <td><strong>{{ row.name }}</strong><span>{{ row.code }}</span></td>
+                  <td class="score">{{ row.final_score }}</td>
+                  <td>{{ row.grade }}</td>
+                  <td>{{ row.day_rate|signed_percent if row.day_rate is defined else "-" }}</td>
+                  <td>{{ "{:.2f}".format(row.rsi) }}</td>
+                  <td>{{ "{:.2f}".format(row.disparity) }}</td>
+                  <td class="positive">{{ row.rate|signed_percent }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+              <p>해당 종목이 없습니다.</p>
+            {% endif %}
+          </article>
+        </section>
+
+        <section class="result-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>종목명</th>
+                <th>최종 점수</th>
+                <th>등급</th>
+                <th>거래량 비율</th>
+                <th>RSI</th>
+                <th>이격도</th>
+                <th>당일 등락률</th>
+                <th>기준가</th>
+                <th>결과가</th>
+                <th>결과</th>
+                <th>수익률</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in verification.joined_rows %}
+              <tr>
+                <td>
+                  <strong>{{ row.name }}</strong>
+                  <span>{{ row.code }}</span>
+                </td>
+                <td class="score">{{ row.final_score }}</td>
+                <td><span class="badge">{{ row.grade }}</span></td>
+                <td>{{ "{:.2f}배".format(row.vol_ratio) }}</td>
+                <td>{{ "{:.2f}".format(row.rsi) }}</td>
+                <td>{{ "{:.2f}".format(row.disparity) }}</td>
+                <td>{{ row.day_rate|signed_percent if row.day_rate is defined else "-" }}</td>
+                <td>{{ "{:,.0f}원".format(row.base) }}</td>
+                <td>{{ "{:,.0f}원".format(row.after) }}</td>
+                <td>{{ row.status }}</td>
+                <td class="{% if row.rate >= 0 %}positive{% else %}negative{% endif %}">{{ row.rate|signed_percent }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </section>
+      {% endif %}
 
       {% if results %}
         <section class="summary-band">
@@ -211,9 +552,11 @@
     <script>
       document.addEventListener("DOMContentLoaded", function () {
         const form = document.querySelector(".search-panel");
+        const verifyForm = document.querySelector(".verify-panel");
         const symbolsTextarea = document.querySelector('textarea[name="symbols"]');
         const chartSymbolInput = document.querySelector('input[name="chart_symbol"]');
-        const submitButton = form.querySelector('button[type="submit"]');
+        const submitButton = form ? form.querySelector('button[type="submit"]') : null;
+        const verifyButton = verifyForm ? verifyForm.querySelector('button[type="submit"]') : null;
         const scrollTopButton = document.querySelector(".scroll-top-button");
         const resultBody = document.querySelector(".result-table-wrap tbody");
         const detailList = document.querySelector(".detail-list");
@@ -229,31 +572,41 @@
             .join(", ");
         }
 
-        symbolsTextarea.addEventListener("input", function () {
-          if (!chartEdited) {
-            chartSymbolInput.value = normalizeChartSymbols(symbolsTextarea.value);
-          }
-        });
+        if (form && symbolsTextarea && chartSymbolInput && submitButton) {
+          symbolsTextarea.addEventListener("input", function () {
+            if (!chartEdited) {
+              chartSymbolInput.value = normalizeChartSymbols(symbolsTextarea.value);
+            }
+          });
 
-        symbolsTextarea.addEventListener("keydown", function (event) {
-          if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            form.requestSubmit();
-          }
-        });
+          symbolsTextarea.addEventListener("keydown", function (event) {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              form.requestSubmit();
+            }
+          });
 
-        chartSymbolInput.addEventListener("input", function () {
-          chartEdited = true;
-        });
+          chartSymbolInput.addEventListener("input", function () {
+            chartEdited = true;
+          });
 
-        form.addEventListener("submit", function () {
-          if (!chartSymbolInput.value.trim()) {
-            chartSymbolInput.value = normalizeChartSymbols(symbolsTextarea.value);
-          }
-          document.body.classList.add("is-loading");
-          submitButton.disabled = true;
-          submitButton.textContent = "분석 중";
-        });
+          form.addEventListener("submit", function () {
+            if (!chartSymbolInput.value.trim()) {
+              chartSymbolInput.value = normalizeChartSymbols(symbolsTextarea.value);
+            }
+            document.body.classList.add("is-loading");
+            submitButton.disabled = true;
+            submitButton.textContent = "분석 중";
+          });
+        }
+
+        if (verifyForm && verifyButton) {
+          verifyForm.addEventListener("submit", function () {
+            document.body.classList.add("is-loading");
+            verifyButton.disabled = true;
+            verifyButton.textContent = "검증 중";
+          });
+        }
 
         function toggleScrollTopButton() {
           scrollTopButton.classList.toggle("is-visible", window.scrollY > 500);

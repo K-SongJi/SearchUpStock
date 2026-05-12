@@ -21,9 +21,12 @@ body {
 
 .toolbar,
 .search-panel,
+.verify-panel,
 .summary-band,
 .detail-block,
-.chart-block {
+.chart-block,
+.verify-grid article,
+.mistake-grid article {
   background: #ffffff;
   border: 1px solid #d7ddd2;
   border-radius: 8px;
@@ -54,6 +57,31 @@ h1 {
   color: #586474;
 }
 
+.main-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.main-tabs a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #cbd5c4;
+  border-radius: 999px;
+  color: #344054;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.main-tabs a.is-active {
+  border-color: #1f6f5b;
+  background: #1f6f5b;
+  color: #ffffff;
+}
+
 .disclaimer {
   color: #9a3412;
   font-weight: 700;
@@ -63,6 +91,27 @@ h1 {
 .search-panel {
   margin-top: 16px;
   padding: 20px;
+}
+
+.verify-panel {
+  display: grid;
+  grid-template-columns: 1fr minmax(360px, 520px);
+  gap: 20px;
+  align-items: end;
+  margin-top: 16px;
+  padding: 20px;
+}
+
+.verify-panel p {
+  margin-top: 8px;
+  color: #586474;
+}
+
+.verify-upload {
+  display: grid;
+  grid-template-columns: 1fr 140px;
+  gap: 12px;
+  align-items: end;
 }
 
 label {
@@ -181,6 +230,10 @@ button:disabled {
   overflow: hidden;
 }
 
+.verification-summary {
+  grid-template-columns: repeat(4, 1fr);
+}
+
 .summary-band div {
   padding: 18px;
   background: #eef5ef;
@@ -207,6 +260,51 @@ td small {
   border: 1px solid #d7ddd2;
   border-radius: 8px;
   background: #ffffff;
+}
+
+.verify-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.verify-grid article,
+.mistake-grid article {
+  padding: 18px;
+  overflow-x: auto;
+}
+
+.verify-grid h2,
+.mistake-grid h2 {
+  margin-bottom: 12px;
+  font-size: 18px;
+}
+
+.mistake-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.mistake-grid p {
+  margin-bottom: 12px;
+  color: #586474;
+}
+
+.verify-grid table {
+  min-width: 0;
+}
+
+.positive {
+  color: #146c43;
+  font-weight: 900;
+}
+
+.negative {
+  color: #b42318;
+  font-weight: 900;
 }
 
 table {
@@ -423,7 +521,12 @@ li + li {
   }
 
   .form-grid,
+  .verify-panel,
+  .verify-upload,
   .summary-band,
+  .verification-summary,
+  .verify-grid,
+  .mistake-grid,
   .metric-grid,
   .score-grid,
   .note-grid {
