@@ -25,6 +25,8 @@ body {
 .summary-band,
 .detail-block,
 .chart-block,
+.insight-panel,
+.condition-panel,
 .verify-grid article,
 .mistake-grid article {
   background: #ffffff;
@@ -231,7 +233,7 @@ button:disabled {
 }
 
 .verification-summary {
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
 }
 
 .summary-band div {
@@ -260,6 +262,105 @@ td small {
   border: 1px solid #d7ddd2;
   border-radius: 8px;
   background: #ffffff;
+}
+
+.insight-panel {
+  margin-top: 18px;
+  padding: 20px;
+}
+
+.condition-panel {
+  margin-top: 18px;
+  padding: 20px;
+}
+
+.insight-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: end;
+  margin-bottom: 14px;
+}
+
+.insight-heading p,
+.insight-card p {
+  color: #586474;
+}
+
+.insight-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.condition-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.insight-card {
+  border: 1px solid #e5e9e1;
+  border-left: 5px solid #667085;
+  border-radius: 6px;
+  padding: 14px;
+  background: #fbfcfa;
+}
+
+.insight-card.good {
+  border-left-color: #146c43;
+}
+
+.insight-card.caution {
+  border-left-color: #b7791f;
+}
+
+.insight-card.warning {
+  border-left-color: #b42318;
+}
+
+.insight-card h3 {
+  display: block;
+  margin-bottom: 7px;
+}
+
+.condition-card {
+  border: 1px solid #e5e9e1;
+  border-radius: 6px;
+  padding: 16px;
+  background: #fbfcfa;
+}
+
+.condition-card-header h3 {
+  display: block;
+  margin-bottom: 7px;
+}
+
+.condition-card-header p {
+  color: #586474;
+}
+
+.condition-highlight {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 12px 0;
+}
+
+.condition-highlight span {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #eef5ef;
+  color: #1f6f5b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.condition-card summary {
+  cursor: pointer;
+  color: #1f6f5b;
+  font-weight: 800;
 }
 
 .verify-grid {
@@ -527,6 +628,8 @@ li + li {
   .verification-summary,
   .verify-grid,
   .mistake-grid,
+  .insight-list,
+  .condition-list,
   .metric-grid,
   .score-grid,
   .note-grid {

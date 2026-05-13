@@ -46,12 +46,12 @@
       <form class="verify-panel" action="/verify" method="post" enctype="multipart/form-data">
         <div>
           <h2>검증 모드</h2>
-          <p>영웅문 조건검색 결과와 우리 분석 결과, 다음날 결과가 들어간 엑셀을 업로드하면 등급별 성과를 확인합니다.</p>
+          <p>영웅문 조건검색 결과와 우리 분석 결과, 다음날 결과가 들어간 엑셀을 하나 이상 업로드하면 누적 성과를 확인합니다.</p>
         </div>
         <div class="verify-upload">
           <label>
             엑셀 파일
-            <input type="file" name="verification_file" accept=".xlsx" required>
+            <input type="file" name="verification_file" accept=".xlsx" multiple required>
           </label>
           <button type="submit">검증하기</button>
         </div>
@@ -73,6 +73,10 @@
       {% if verification %}
         <section class="summary-band verification-summary">
           <div>
+            <span class="label">검증 파일</span>
+            <strong>{{ verification.file_count }}개</strong>
+          </div>
+          <div>
             <span class="label">분석 종목</span>
             <strong>{{ verification.analyzed_count }}개</strong>
           </div>
@@ -90,7 +94,80 @@
           </div>
         </section>
 
+        {% if verification.insights %}
+        <section class="insight-panel">
+          <div class="insight-heading">
+            <h2>자동 해석</h2>
+            <p>현재 업로드된 검증 결과에서 눈에 띄는 구간과 주의할 점입니다.</p>
+          </div>
+          <div class="insight-list">
+            {% for insight in verification.insights %}
+            <article class="insight-card {{ insight.type }}">
+              <h3>{{ insight.title }}</h3>
+              <p>{{ insight.body }}</p>
+            </article>
+            {% endfor %}
+          </div>
+        </section>
+        {% endif %}
+
+        <section class="condition-panel">
+          <div class="insight-heading">
+            <h2>조건식 기준</h2>
+            <p>검증 모드는 아래 두 조건식을 기준으로 기본형과 정밀형을 구분합니다.</p>
+          </div>
+          <div class="condition-list">
+            {% for name, preset in condition_presets.items() %}
+            <article class="condition-card">
+              <div class="condition-card-header">
+                <h3>{{ name }}</h3>
+                <p>{{ preset.summary }}</p>
+              </div>
+              <div class="condition-highlight">
+                {% for item in preset.highlights %}
+                <span>{{ item }}</span>
+                {% endfor %}
+              </div>
+              <details>
+                <summary>조건식 상세 보기</summary>
+                <ul>
+                  {% for rule in preset.rules %}
+                  <li>{{ rule }}</li>
+                  {% endfor %}
+                </ul>
+              </details>
+            </article>
+            {% endfor %}
+          </div>
+        </section>
+
         <section class="verify-grid">
+          <article>
+            <h2>조건식별 성과</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>조건식</th>
+                  <th>개수</th>
+                  <th>상승</th>
+                  <th>승률</th>
+                  <th>평균</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in verification.condition_stats %}
+                <tr>
+                  <td>{{ item.name }}</td>
+                  <td>{{ item.count }}</td>
+                  <td>{{ item.wins }}</td>
+                  <td>{{ "{:.1f}%".format(item.win_rate) }}</td>
+                  <td class="{% if item.average_rate >= 0 %}positive{% else %}negative{% endif %}">{{ item.average_rate|signed_percent }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+
           <article>
             <h2>등급별 성과</h2>
             <table>
@@ -248,6 +325,38 @@
           </article>
 
           <article>
+            <h2>파일별 성과</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>파일</th>
+                  <th>조건식</th>
+                  <th>분석</th>
+                  <th>매칭</th>
+                  <th>상승</th>
+                  <th>하락</th>
+                  <th>승률</th>
+                  <th>평균</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in verification.file_stats %}
+                <tr>
+                  <td>{{ item.filename }}</td>
+                  <td>{{ item.condition_type }}</td>
+                  <td>{{ item.analyzed_count }}</td>
+                  <td>{{ item.matched_count }}</td>
+                  <td>{{ item.wins }}</td>
+                  <td>{{ item.losses }}</td>
+                  <td>{{ "{:.1f}%".format(item.win_rate) }}</td>
+                  <td class="{% if item.average_rate >= 0 %}positive{% else %}negative{% endif %}">{{ item.average_rate|signed_percent }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+
+          <article>
             <h2>매매일기 합계</h2>
             {% if verification.diary_by_date %}
             <table>
@@ -280,6 +389,8 @@
             <table>
               <thead>
                 <tr>
+                  <th>검증일</th>
+                  <th>조건식</th>
                   <th>종목명</th>
                   <th>점수</th>
                   <th>등급</th>
@@ -292,6 +403,8 @@
               <tbody>
                 {% for row in verification.high_score_failures %}
                 <tr>
+                  <td>{{ row.source_date }}</td>
+                  <td>{{ row.condition_type }}</td>
                   <td><strong>{{ row.name }}</strong><span>{{ row.code }}</span></td>
                   <td class="score">{{ row.final_score }}</td>
                   <td>{{ row.grade }}</td>
@@ -315,6 +428,8 @@
             <table>
               <thead>
                 <tr>
+                  <th>검증일</th>
+                  <th>조건식</th>
                   <th>종목명</th>
                   <th>점수</th>
                   <th>등급</th>
@@ -327,6 +442,8 @@
               <tbody>
                 {% for row in verification.low_score_successes %}
                 <tr>
+                  <td>{{ row.source_date }}</td>
+                  <td>{{ row.condition_type }}</td>
                   <td><strong>{{ row.name }}</strong><span>{{ row.code }}</span></td>
                   <td class="score">{{ row.final_score }}</td>
                   <td>{{ row.grade }}</td>
@@ -348,6 +465,8 @@
           <table>
             <thead>
               <tr>
+                <th>검증일</th>
+                <th>조건식</th>
                 <th>종목명</th>
                 <th>최종 점수</th>
                 <th>등급</th>
@@ -364,6 +483,8 @@
             <tbody>
               {% for row in verification.joined_rows %}
               <tr>
+                <td>{{ row.source_date }}</td>
+                <td>{{ row.condition_type }}</td>
                 <td>
                   <strong>{{ row.name }}</strong>
                   <span>{{ row.code }}</span>
