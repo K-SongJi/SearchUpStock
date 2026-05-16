@@ -14,6 +14,7 @@
           <p>기술적 조건이 여러 개 겹치는 종목을 점수순으로 선별하는 보조 도구입니다.</p>
           <nav class="main-tabs" aria-label="대메뉴">
             <a href="{{ url_for('index') }}" class="{% if active_tab == 'analyze' %}is-active{% endif %}">급등 후보 분석</a>
+            <a href="{{ url_for('upload_page') }}" class="{% if active_tab == 'upload' %}is-active{% endif %}">DB 업로드</a>
             <a href="{{ url_for('index') }}?tab=verify" class="{% if active_tab == 'verify' %}is-active{% endif %}">검증 모드</a>
           </nav>
         </div>
@@ -42,18 +43,28 @@
           <button type="submit">분석하기</button>
         </div>
       </form>
-      {% else %}
+      {% elif active_tab == "verify" %}
       <form class="verify-panel" action="/verify" method="post" enctype="multipart/form-data">
         <div>
           <h2>검증 모드</h2>
-          <p>영웅문 조건검색 결과와 우리 분석 결과, 다음날 결과가 들어간 엑셀을 하나 이상 업로드하면 누적 성과를 확인합니다.</p>
+          <p>DB에 저장된 영웅문 조건검색, 검증모드 분석, 다음날 실제 결과를 연결해 누적 성과를 확인합니다.</p>
         </div>
         <div class="verify-upload">
+          <button type="submit">DB 데이터 새로고침</button>
+        </div>
+      </form>
+      {% else %}
+      <form class="db-upload-panel" action="/upload" method="post" enctype="multipart/form-data">
+        <div>
+          <h2>DB 업로드</h2>
+          <p>검증모드와 같은 엑셀 파일을 올리면 파일 안의 기준일, 조건식, 종목코드를 읽어 중복 후보를 먼저 검토합니다.</p>
+        </div>
+        <div class="db-upload-grid">
           <label>
             엑셀 파일
-            <input type="file" name="verification_file" accept=".xlsx" multiple required>
+            <input type="file" name="excel_file" accept=".xlsx" required>
           </label>
-          <button type="submit">검증하기</button>
+          <button type="submit">DB 저장하기</button>
         </div>
       </form>
       {% endif %}
@@ -63,6 +74,74 @@
         <strong>처리 중입니다</strong>
         <span>데이터를 읽고 결과를 계산하는 중입니다.</span>
       </div>
+
+      {% if upload_result %}
+        <section class="upload-result {% if not upload_result.ok %}is-error{% endif %}">
+          <div class="detail-header">
+            <div>
+              <h2>업로드 검토 결과</h2>
+              <p>{{ upload_result.message if upload_result.message else upload_result.filename }}</p>
+            </div>
+            {% if upload_result.ok %}
+              <div class="final-score">{{ upload_result.unique_rows }}<span>건</span></div>
+            {% endif %}
+          </div>
+
+          {% if upload_result.ok %}
+            <div class="metric-grid">
+              {% if upload_result.saved %}
+                <div><span>저장 상태</span><strong>완료</strong></div>
+                <div><span>업로드 ID</span><strong>{{ upload_result.save_result.batch_id }}</strong></div>
+                <div><span>영웅문 원본</span><strong>{{ upload_result.save_result.kiwoom_count }}건</strong></div>
+                <div><span>검증모드 결과</span><strong>{{ upload_result.save_result.analysis_count }}건</strong></div>
+                <div><span>다음날 결과</span><strong>{{ upload_result.save_result.outcome_count }}건</strong></div>
+              {% elif upload_result.save_error %}
+                <div><span>저장 상태</span><strong>실패</strong></div>
+              {% endif %}
+              <div><span>시트</span><strong>{{ upload_result.sheet_name }}</strong></div>
+              <div><span>파일 해시</span><strong>{{ upload_result.file_hash }}</strong></div>
+              <div><span>기준일</span><strong>{{ upload_result.detected_date }}</strong></div>
+              <div><span>포착 조건</span><strong>{{ upload_result.signal_type }}</strong></div>
+              <div><span>처리 방식</span><strong>{{ upload_result.upload_mode }}</strong></div>
+              <div><span>전체 행</span><strong>{{ upload_result.total_rows }}건</strong></div>
+              <div><span>유효 행</span><strong>{{ upload_result.valid_rows }}건</strong></div>
+              <div><span>저장 후보</span><strong>{{ upload_result.unique_rows }}건</strong></div>
+              <div><span>파일 내부 중복</span><strong>{{ upload_result.duplicate_rows }}건</strong></div>
+              <div><span>종목코드 컬럼</span><strong>{{ upload_result.code_column }}</strong></div>
+              <div><span>종목명 컬럼</span><strong>{{ upload_result.name_column }}</strong></div>
+            </div>
+
+            {% if upload_result.save_error %}
+              <p class="warning-text upload-warning">{{ upload_result.save_error }}</p>
+            {% endif %}
+
+            {% if upload_result.preview %}
+              <section class="result-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      {% for column in upload_result.preview[0].keys() %}
+                        <th>{{ column }}</th>
+                      {% endfor %}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in upload_result.preview %}
+                      <tr>
+                        {% for value in row.values() %}
+                          <td>{{ value }}</td>
+                        {% endfor %}
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </section>
+            {% endif %}
+          {% else %}
+            <p class="warning-text">{{ upload_result.message }}</p>
+          {% endif %}
+        </section>
+      {% endif %}
 
       {% if verification_error %}
         <section class="chart-block">
@@ -674,10 +753,12 @@
       document.addEventListener("DOMContentLoaded", function () {
         const form = document.querySelector(".search-panel");
         const verifyForm = document.querySelector(".verify-panel");
+        const uploadForm = document.querySelector(".db-upload-panel");
         const symbolsTextarea = document.querySelector('textarea[name="symbols"]');
         const chartSymbolInput = document.querySelector('input[name="chart_symbol"]');
         const submitButton = form ? form.querySelector('button[type="submit"]') : null;
         const verifyButton = verifyForm ? verifyForm.querySelector('button[type="submit"]') : null;
+        const uploadButton = uploadForm ? uploadForm.querySelector('button[type="submit"]') : null;
         const scrollTopButton = document.querySelector(".scroll-top-button");
         const resultBody = document.querySelector(".result-table-wrap tbody");
         const detailList = document.querySelector(".detail-list");
@@ -726,6 +807,14 @@
             document.body.classList.add("is-loading");
             verifyButton.disabled = true;
             verifyButton.textContent = "검증 중";
+          });
+        }
+
+        if (uploadForm && uploadButton) {
+          uploadForm.addEventListener("submit", function () {
+            document.body.classList.add("is-loading");
+            uploadButton.disabled = true;
+            uploadButton.textContent = "저장 중";
           });
         }
 

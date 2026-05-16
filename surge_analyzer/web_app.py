@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import re
 import os
 from io import BytesIO
@@ -17,6 +18,7 @@ import matplotlib.pyplot as plt
 from flask import Flask, render_template, request
 
 from .analyzer import analyze_many, get_price_history, normalize_symbol
+from .db import fetch_verification_rows, save_upload_payload
 from .resolver import display_name_for_symbol
 
 
@@ -78,6 +80,11 @@ CONDITION_PRESETS = {
         ],
     },
 }
+UPLOAD_MODES = {
+    "insert_only": "신규만 추가",
+    "upsert": "덮어쓰기",
+    "replace_date": "기준일 전체 재업로드",
+}
 
 
 @app.template_filter("market_price")
@@ -97,7 +104,9 @@ def signed_percent(value: float | int | None) -> str:
 @app.get("/")
 def index():
     active_tab = request.args.get("tab", "analyze")
-    return _render_index(active_tab=active_tab if active_tab in {"analyze", "verify"} else "analyze")
+    if active_tab == "verify":
+        return _render_database_verification()
+    return _render_index(active_tab=active_tab if active_tab in {"analyze", "verify", "upload"} else "analyze")
 
 
 @app.post("/analyze")
@@ -125,24 +134,35 @@ def analyze():
         standalone_charts=standalone_charts,
         verification=None,
         verification_error="",
+        upload_result=None,
+        upload_modes=UPLOAD_MODES,
     )
 
 
 @app.post("/verify")
 def verify():
-    uploaded_files = [file for file in request.files.getlist("verification_file") if file and file.filename]
-    verification = None
-    verification_error = ""
+    return _render_database_verification()
 
-    if not uploaded_files:
-        verification_error = "검증할 엑셀 파일을 선택해주세요."
-    else:
+
+@app.get("/upload")
+def upload_page():
+    return _render_index(active_tab="upload")
+
+
+@app.post("/upload")
+def upload_excel():
+    uploaded_file = request.files.get("excel_file")
+    upload_result = _inspect_upload_workbook(uploaded_file)
+    if upload_result.get("ok") and upload_result.get("payload"):
         try:
-            verification = _verify_uploaded_workbooks(uploaded_files)
+            save_result = save_upload_payload(upload_result["payload"])
+            upload_result["saved"] = True
+            upload_result["save_result"] = save_result
+            upload_result["message"] = "DB 저장이 완료되었습니다."
         except Exception as exc:
-            verification_error = f"파일을 읽지 못했습니다: {exc}"
-
-    return _render_index(active_tab="verify", verification=verification, verification_error=verification_error)
+            upload_result["saved"] = False
+            upload_result["save_error"] = f"DB 저장 중 오류가 발생했습니다: {exc}"
+    return _render_index(active_tab="upload", upload_result=upload_result)
 
 
 def _render_index(
@@ -150,6 +170,7 @@ def _render_index(
     active_tab: str = "analyze",
     verification: dict | None = None,
     verification_error: str = "",
+    upload_result: dict | None = None,
 ):
     return render_template(
         "index.html",
@@ -165,7 +186,328 @@ def _render_index(
         verification=verification,
         verification_error=verification_error,
         condition_presets=CONDITION_PRESETS,
+        upload_result=upload_result,
+        upload_modes=UPLOAD_MODES,
     )
+
+
+def _render_database_verification():
+    try:
+        verification = _verify_database_rows()
+        return _render_index(active_tab="verify", verification=verification)
+    except Exception as exc:
+        return _render_index(active_tab="verify", verification_error=f"DB 검증 데이터를 읽지 못했습니다: {exc}")
+
+
+def _verify_database_rows() -> dict:
+    joined_rows = fetch_verification_rows()
+    file_stats = _database_file_stats(joined_rows)
+    file_count = len({row.get("source_file") for row in joined_rows if row.get("source_file")})
+    result = {
+        "filename": "DB 누적 검증",
+        "file_count": file_count,
+        "sheet_name": "DB",
+        "raw_count": len(joined_rows),
+        "analyzed_count": len(joined_rows),
+        "outcome_count": len(joined_rows),
+        "diary_count": 0,
+        "condition_stats": _group_performance(joined_rows, "condition_type"),
+        "grade_stats": _group_performance(joined_rows, "grade"),
+        "score_stats": _score_bucket_stats(joined_rows),
+        "volume_stats": _volume_bucket_stats(joined_rows),
+        "rsi_stats": _rsi_bucket_stats(joined_rows),
+        "disparity_stats": _disparity_bucket_stats(joined_rows),
+        "day_change_stats": _day_change_bucket_stats(joined_rows),
+        "high_score_failures": _high_score_failures(joined_rows),
+        "low_score_successes": _low_score_successes(joined_rows),
+        "top_outcomes": sorted(joined_rows, key=lambda row: row.get("rate", 0), reverse=True)[:10],
+        "bottom_outcomes": sorted(joined_rows, key=lambda row: row.get("rate", 0))[:10],
+        "joined_rows": joined_rows,
+        "diary_rows": [],
+        "diary_by_date": [],
+        "file_stats": file_stats,
+        "summary": _performance_summary(joined_rows),
+    }
+    result["insights"] = _verification_insights(result)
+    return result
+
+
+def _database_file_stats(rows: list[dict]) -> list[dict]:
+    grouped: dict[str, list[dict]] = {}
+    for row in rows:
+        grouped.setdefault(row.get("source_file") or "미지정", []).append(row)
+
+    stats = []
+    for filename, items in grouped.items():
+        summary = _performance_summary(items)
+        stats.append(
+            {
+                "filename": filename,
+                "condition_type": _dominant_condition(items),
+                "analyzed_count": len(items),
+                "matched_count": summary["total"],
+                "wins": summary["wins"],
+                "losses": summary["losses"],
+                "win_rate": summary["win_rate"],
+                "average_rate": summary["average_rate"],
+            }
+        )
+    return stats
+
+
+def _inspect_upload_workbook(uploaded_file) -> dict:
+    if not uploaded_file or not uploaded_file.filename:
+        return {"ok": False, "message": "엑셀 파일을 선택해주세요."}
+
+    content = uploaded_file.read()
+    filename = Path(uploaded_file.filename).name
+    file_hash = hashlib.sha256(content).hexdigest()
+    detected_date = _source_date_from_filename(filename)
+
+    try:
+        rows_by_sheet = _read_xlsx_rows(content)
+    except Exception as exc:
+        return {"ok": False, "message": f"엑셀 파일을 읽지 못했습니다: {exc}"}
+
+    if not rows_by_sheet or not rows_by_sheet[0][1]:
+        return {"ok": False, "message": "엑셀에서 데이터를 찾지 못했습니다."}
+
+    sheet_name, rows = rows_by_sheet[0]
+    try:
+        payload = _build_upload_payload(
+            rows=rows,
+            filename=filename,
+            file_hash=file_hash,
+            detected_date=detected_date,
+        )
+    except ValueError as exc:
+        return {"ok": False, "message": str(exc), "filename": filename, "file_hash": file_hash[:16]}
+    raw_rows, analyzed_rows, _, _ = _extract_verification_rows(rows)
+    if analyzed_rows:
+        return _inspect_analyzed_upload_rows(
+            analyzed_rows=analyzed_rows,
+            filename=filename,
+            sheet_name=sheet_name,
+            file_hash=file_hash,
+            detected_date=detected_date,
+            raw_count=len(raw_rows),
+            payload=payload,
+        )
+
+    headers = [str(value).strip() for value in rows[0]]
+    code_index = _find_header_index(headers, ["종목코드", "종목 코드", "code", "symbol", "ticker"])
+    name_index = _find_header_index(headers, ["종목명", "종목 이름", "name"])
+
+    if code_index is None:
+        return {
+            "ok": False,
+            "message": "종목코드 컬럼을 찾지 못했습니다. 엑셀에 '종목코드' 또는 'symbol' 컬럼이 필요합니다.",
+            "filename": filename,
+            "file_hash": file_hash[:16],
+        }
+
+    seen_keys: set[str] = set()
+    duplicate_rows = 0
+    valid_rows = 0
+    preview: list[dict[str, str]] = []
+    signal_type = "조건검색"
+
+    for row in rows[1:]:
+        stock_code = _normalize_upload_stock_code(_cell(row, code_index))
+        if not stock_code:
+            continue
+        valid_rows += 1
+        duplicate_key = f"{detected_date}|{stock_code}|{signal_type}"
+        if duplicate_key in seen_keys:
+            duplicate_rows += 1
+        else:
+            seen_keys.add(duplicate_key)
+
+        if len(preview) < 8:
+            item = {headers[code_index] or "종목코드": stock_code}
+            if name_index is not None and name_index != code_index:
+                item[headers[name_index] or "종목명"] = _cell(row, name_index)
+            preview.append(item)
+
+    return {
+        "ok": True,
+        "filename": filename,
+        "sheet_name": sheet_name,
+        "file_hash": file_hash[:16],
+        "detected_date": detected_date,
+        "signal_type": signal_type,
+        "upload_mode": UPLOAD_MODES["insert_only"],
+        "total_rows": max(len(rows) - 1, 0),
+        "valid_rows": valid_rows,
+        "unique_rows": len(seen_keys),
+        "duplicate_rows": duplicate_rows,
+        "code_column": headers[code_index] or "-",
+        "name_column": headers[name_index] if name_index is not None else "-",
+        "preview": preview,
+    }
+
+
+def _inspect_analyzed_upload_rows(
+    *,
+    analyzed_rows: list[dict],
+    filename: str,
+    sheet_name: str,
+    file_hash: str,
+    detected_date: str,
+    raw_count: int,
+    payload: dict,
+) -> dict:
+    seen_keys: set[str] = set()
+    duplicate_rows = 0
+    preview = []
+    condition_types: set[str] = set()
+
+    for row in analyzed_rows:
+        stock_code = _normalize_upload_stock_code(row.get("code", ""))
+        signal_type = row.get("condition_type") or "미지정"
+        condition_types.add(signal_type)
+        duplicate_key = f"{detected_date}|{stock_code}|{signal_type}"
+        if duplicate_key in seen_keys:
+            duplicate_rows += 1
+        else:
+            seen_keys.add(duplicate_key)
+
+        if len(preview) < 8:
+            preview.append(
+                {
+                    "종목코드": stock_code,
+                    "종목명": row.get("name", ""),
+                    "조건식": signal_type,
+                    "최종점수": str(row.get("final_score", "")),
+                    "등급": row.get("grade", ""),
+                }
+            )
+
+    signal_type_label = ", ".join(sorted(condition_types)) if condition_types else "미지정"
+    return {
+        "ok": True,
+        "filename": filename,
+        "sheet_name": sheet_name,
+        "file_hash": file_hash[:16],
+        "detected_date": detected_date,
+        "signal_type": signal_type_label,
+        "upload_mode": UPLOAD_MODES["insert_only"],
+        "total_rows": raw_count or len(analyzed_rows),
+        "valid_rows": len(analyzed_rows),
+        "unique_rows": len(seen_keys),
+        "duplicate_rows": duplicate_rows,
+        "code_column": "검증파일 분석 결과",
+        "name_column": "검증파일 분석 결과",
+        "preview": preview,
+        "payload": payload,
+    }
+
+
+def _build_upload_payload(rows: list[list[str]], filename: str, file_hash: str, detected_date: str) -> dict:
+    mysql_date = _mysql_date_from_source(detected_date)
+    if not mysql_date:
+        raise ValueError("파일명에서 기준일을 찾지 못했습니다. 파일명에 2026.05.13 같은 날짜가 필요합니다.")
+
+    condition_index = _header_index(rows, "조건식")
+    file_condition = _file_condition_type(rows, condition_index)
+    kiwoom_rows = []
+    analysis_rows = []
+    outcome_rows = []
+    seen_analysis_keys: set[str] = set()
+    duplicate_rows = 0
+
+    for index, row in enumerate(rows[1:], start=1):
+        row_order = index
+        stock_code = _normalize_upload_stock_code(_cell(row, 0))
+        if len(row) >= 7 and stock_code:
+            kiwoom_rows.append(
+                {
+                    "stock_code": stock_code,
+                    "stock_name": _cell(row, 1),
+                    "current_price": _safe_int(_cell(row, 2)),
+                    "day_direction": _cell(row, 3),
+                    "day_change_price": _safe_int(_cell(row, 4)),
+                    "day_change_rate": _rate_percent(_cell(row, 5)),
+                    "volume": _safe_int(_cell(row, 6)),
+                    "reference_text": _cell(row, 25) or None,
+                    "row_order": row_order,
+                }
+            )
+
+        if len(row) >= 16 and _safe_int(_cell(row, 11)) is not None and _cell(row, 12):
+            analysis_code = _normalize_upload_stock_code(_extract_code(_cell(row, 8)) or stock_code)
+            condition_type = _normalize_condition_type(_cell(row, condition_index)) if condition_index is not None else ""
+            if condition_type == "미지정":
+                condition_type = file_condition
+            condition_type = condition_type or "미지정"
+            duplicate_key = f"{mysql_date}|{analysis_code}|{condition_type}"
+            if duplicate_key in seen_analysis_keys:
+                duplicate_rows += 1
+            else:
+                seen_analysis_keys.add(duplicate_key)
+            analysis_rows.append(
+                {
+                    "stock_code": analysis_code,
+                    "stock_name": _clean_name_code(_cell(row, 8), analysis_code) or _cell(row, 1),
+                    "condition_type": condition_type,
+                    "close_price": _safe_int(_cell(row, 9)),
+                    "pre_filter_score": _safe_int(_cell(row, 10)),
+                    "final_score": _safe_int(_cell(row, 11)),
+                    "final_grade": _cell(row, 12),
+                    "volume_ratio": _first_float(_cell(row, 13)),
+                    "rsi": _first_float(_cell(row, 14)),
+                    "disparity": _first_float(_cell(row, 15)),
+                    "row_order": row_order,
+                }
+            )
+
+        outcome_start = _outcome_start_index(row)
+        if outcome_start is not None:
+            outcome_code = _normalize_upload_stock_code(_cell(row, outcome_start))
+            outcome_rows.append(
+                {
+                    "result_date": None,
+                    "stock_code": outcome_code,
+                    "stock_name": _cell(row, outcome_start + 1),
+                    "base_price": _safe_int(_cell(row, outcome_start + 2)),
+                    "next_price": _safe_int(_cell(row, outcome_start + 3)),
+                    "price_diff": _safe_int(_cell(row, outcome_start + 4)),
+                    "result_status": _cell(row, outcome_start + 5),
+                    "return_rate": _rate_percent(_cell(row, outcome_start + 6)),
+                    "row_order": row_order,
+                }
+            )
+
+    return {
+        "file_name": filename,
+        "file_hash": file_hash,
+        "detected_date": mysql_date,
+        "total_rows": len(kiwoom_rows),
+        "valid_rows": len(analysis_rows),
+        "duplicate_rows": duplicate_rows,
+        "memo": "검증모드 엑셀 업로드",
+        "kiwoom_rows": kiwoom_rows,
+        "analysis_rows": analysis_rows,
+        "outcome_rows": outcome_rows,
+    }
+
+
+def _find_header_index(headers: list[str], candidates: list[str]) -> int | None:
+    lowered = {header.lower(): index for index, header in enumerate(headers)}
+    for candidate in candidates:
+        index = lowered.get(candidate.lower())
+        if index is not None:
+            return index
+    return None
+
+
+def _normalize_upload_stock_code(value: str) -> str:
+    text = str(value).strip()
+    if not text:
+        return ""
+    if re.fullmatch(r"\d+(?:\.0)?", text):
+        return str(int(float(text))).zfill(6)
+    return text
 
 
 def _parse_symbols(symbols_text: str) -> list[str]:
@@ -636,10 +978,12 @@ def _extract_verification_rows(rows: list[list[str]]) -> tuple[list[dict], list[
         if len(row) >= 16 and _safe_int(row[11]) is not None and row[12]:
             code = _extract_code(row[8]) or _cell(row, 0)
             condition_type = _normalize_condition_type(_cell(row, condition_index)) if condition_index is not None else ""
+            if condition_type == "미지정":
+                condition_type = file_condition
             analyzed_rows.append(
                 {
                     "code": code,
-                    "condition_type": condition_type or file_condition,
+                    "condition_type": condition_type or "미지정",
                     "name": _clean_name_code(row[8], code) or _cell(row, 1),
                     "close": _cell(row, 9),
                     "before_score": _safe_int(row[10]),
@@ -871,7 +1215,11 @@ def _first_float(value: str) -> float:
 def _rate_percent(value: str) -> float:
     text = str(value)
     rate = _first_float(text)
-    return rate if "%" in text else rate * 100
+    if "%" in text:
+        return rate
+    if abs(rate) <= 1:
+        return rate * 100
+    return rate
 
 
 def _source_date_from_filename(filename: str) -> str:
@@ -879,6 +1227,13 @@ def _source_date_from_filename(filename: str) -> str:
     if not match:
         return Path(filename).stem
     return ".".join(match.groups())
+
+
+def _mysql_date_from_source(source: str) -> str | None:
+    match = re.search(r"(\d{4})[._-](\d{2})[._-](\d{2})", source)
+    if not match:
+        return None
+    return "-".join(match.groups())
 
 
 def _extract_code(value: str) -> str:

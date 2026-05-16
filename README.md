@@ -69,5 +69,21 @@ http://127.0.0.1:5000
 - 결과 표에서 한국 종목은 종목명을 우선 표시
 - 종목별 상세 점수와 주의사항 표시
 - 선택 종목 차트 표시
+- DB 업로드 탭에서 검증 엑셀을 MySQL에 저장
+- 검증 모드에서 DB 누적 데이터를 기준으로 성과 분석
 
 차트에는 종가, MA5, MA20, MA60, 볼린저밴드, 거래량, RSI, 이격도, 스토캐스틱이 표시됩니다.
+
+## MySQL 설정
+
+```powershell
+copy .env.example .env
+```
+
+`.env`에 MySQL 접속 정보를 입력한 뒤 스키마를 생성합니다.
+
+```powershell
+.\.venv\Scripts\python.exe -m surge_analyzer.db
+```
+
+기본 DB 이름은 `stock_analysis`입니다.

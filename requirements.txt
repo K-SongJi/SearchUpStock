@@ -4,3 +4,4 @@ numpy>=1.26.0
 Flask>=3.0.0
 matplotlib>=3.8.0
 finance-datareader>=0.9.96
+mysql-connector-python>=8.4.0
